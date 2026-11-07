@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-07
+
 ### Added
 
 - The severe thunderstorm outlook of the NOAA Storm Prediction Center at each house of Gladys located in the
@@ -20,4 +22,5 @@ the notes of the version's GitHub Release.
 - A dashboard widget with the three days, the probabilities and a link to the SPC outlooks.
 - Texts, feature names and documentation in English, French, German and Spanish.
 
-[Unreleased]: https://github.com/guim31/gladys-spc/commits/main
+[Unreleased]: https://github.com/guim31/gladys-spc/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/guim31/gladys-spc/releases/tag/v1.0.0
