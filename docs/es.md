@@ -1,0 +1,113 @@
+# Riesgo de tormentas severas (SPC)
+
+Las perspectivas convectivas del **Storm Prediction Center** (SPC) de la NOAA en su casa, en Gladys: la categoría de
+riesgo de tormentas severas de hoy, mañana y pasado mañana, y las probabilidades de tornado, granizo y rachas
+destructivas de hoy y mañana. Con disparadores de escena y un widget para el panel.
+
+> **No es un servicio de avisos oficial.** Las perspectivas son previsiones de los próximos días. Para las
+> vigilancias y avisos en vigor, siga al National Weather Service (la integración
+> [National Weather Service](https://github.com/William-De71/gladys-national-weather-service) los lleva a Gladys),
+> una radio NOAA Weather Radio y a sus autoridades locales.
+
+Sin afiliación con la NOAA ni con el National Weather Service.
+
+## Qué obtiene
+
+- **Un dispositivo por casa** de Gladys ubicada en los Estados Unidos contiguos.
+- La **categoría SPC** de hoy, mañana y pasado mañana: 0 (sin riesgo de tormentas severas, o solo tormentas
+  comunes), 1 Marginal, 2 Ligero (Slight), 3 Mejorado (Enhanced), 4 Moderado (Moderate), 5 Alto (High).
+- La **probabilidad** (%) de un tornado, de granizo de 2,5 cm o más y de rachas de 93 km/h o más a menos de 40 km
+  (25 millas) de la casa, hoy y mañana; para pasado mañana, la probabilidad de cualquier tormenta severa.
+- El **grupo de intensidad condicional** (0 a 3) de cada fenómeno: cuanto más alto, más intensas podrían ser las
+  tormentas (tornados fuertes, granizo muy grande, rachas destructivas). Sustituye desde 2026 a las zonas rayadas
+  «significativas».
+- Una frase de **resumen**, por ejemplo «Riesgo ligero de tormentas severas hoy (tornado 5 %, granizo 15 %, rachas
+  15 %); mañana: 3 · Mejorado».
+- Tres **disparadores de escena** y un **widget para el panel**.
+
+## Requisitos
+
+- Gladys Assistant 5.3.0 o posterior.
+- La **ubicación de su casa** indicada en Gladys (Ajustes → Casas), en los Estados Unidos contiguos. Alaska, Hawái,
+  Puerto Rico y los demás países no están cubiertos por el SPC.
+- Acceso a Internet desde Gladys. Sin cuenta ni clave.
+
+## Configuración
+
+### Ajustes
+
+| Ajuste                                 | Por defecto | Función                                                                             |
+| -------------------------------------- | ----------- | ----------------------------------------------------------------------------------- |
+| Idioma de los nombres de las funciones | Francés     | Nombres de las funciones de los nuevos dispositivos, idioma del resumen y variables |
+
+Al instalarla, la integración pide la **ubicación de sus casas**: lee sus coordenadas en Gladys y comprueba las
+zonas del SPC **dentro del contenedor**. Su ubicación no se envía a nadie. Abra después la pestaña **Descubrir** de la
+integración y cree el dispositivo de su casa. Una casa añadida o movida más tarde aparece tras una nueva búsqueda en
+la pestaña Descubrir.
+
+## Dispositivos
+
+| Función                                      | Tipo   | Valor                                         |
+| -------------------------------------------- | ------ | --------------------------------------------- |
+| Riesgo de tormentas hoy / mañana / en 2 días | número | Categoría SPC, de 0 a 5                       |
+| Probabilidad de tornado / granizo / rachas   | %      | Hoy y mañana, a menos de 40 km                |
+| Tormenta severa en 2 días                    | %      | Cualquier tormenta severa, pasado mañana      |
+| Intensidad … (grupo)                         | número | Grupo de intensidad condicional, de 0 a 3     |
+| Resumen del riesgo de tormentas              | texto  | Frase de resumen, en el idioma de los ajustes |
+
+Las categorías son números (no la insignia «riesgo» de Gladys, que solo conoce cuatro niveles): una condición de
+escena como «riesgo hoy ≥ 2» funciona. «Hoy» es el día convectivo del SPC, de 12 h UTC a 12 h UTC de la mañana
+siguiente. Cuando el SPC no responde, no se publica nada: los últimos valores simplemente envejecen.
+
+## Widget del panel
+
+**Riesgo de tormentas**: para la casa elegida (si no, la primera), una línea por día con su categoría, coloreada
+según la escala del SPC en la medida en que lo permite la paleta de Gladys (verde Marginal, amarillo Ligero y
+Mejorado, rojo Moderado y Alto, azul para las tormentas comunes), un título a partir de Ligero, las probabilidades de
+tornado / granizo / rachas de hoy y mañana (con el grupo de intensidad más alto, «CIG2»), la hora de emisión y un
+botón hacia las perspectivas del SPC. Las probabilidades y el botón tienen cada uno un ajuste para ocultarlos.
+
+## Disparadores de escena
+
+- **El riesgo de tormentas alcanza una categoría**: una nueva perspectiva eleva la categoría de un día al nivel
+  elegido (1 a 5) o más, una vez, al superarlo. Filtros: casa, día (hoy, mañana, en 2 días).
+- **Riesgo de tormentas elevado**: una nueva perspectiva eleva la categoría de un día ya previsto, sea cual sea el
+  nivel.
+- **La probabilidad de tornado alcanza un umbral**: la probabilidad de tornado de hoy o de mañana alcanza el umbral
+  elegido (2 a 60 %).
+
+El mismo día del calendario se sigue de una perspectiva a otra: si el día 3 ya anunciaba Mejorado, el día 2 que lo
+confirma no dispara nada. Variables: casa, día, fecha, categoría y su nombre, resumen; la categoría anterior en una
+elevación; la probabilidad y el grupo de intensidad en un tornado. Las primeras perspectivas leídas tras la
+instalación solo fijan la referencia: no disparan nada.
+
+## Ejemplos de escenas
+
+- Cuando el riesgo de mañana alcance Ligero, enviar «Riesgo {{level_name}} de tormentas severas mañana» a la
+  familia.
+- Cuando la probabilidad de tornado de hoy alcance el 10 %, poner la luz del pasillo en naranja y enviar un mensaje.
+- Cada mañana a las 7, si el riesgo de hoy es 3 o más, leer el resumen en voz alta.
+
+## Fuentes de datos, licencia y cuotas
+
+- [Perspectivas convectivas del SPC](https://www.spc.noaa.gov/products/outlook/), NOAA / National Weather Service,
+  dominio público (obra del gobierno de EE. UU.). Leídas cada 15 minutos: once pequeños archivos GeoJSON, con
+  peticiones condicionales, de modo que un archivo sin cambios desde el ciclo anterior cuesta una respuesta 304 sin
+  contenido. El SPC emite la perspectiva del día 1 cinco veces al día, la del día 2 dos veces y la del día 3 una o
+  dos veces.
+
+## Solución de problemas
+
+- **«Ninguna casa de Gladys tiene ubicación»**: indique la ubicación de su casa en Ajustes → Casas y vuelva a buscar
+  en la pestaña Descubrir.
+- **«Ninguna casa está en los Estados Unidos contiguos»**: el SPC solo cubre los 48 estados contiguos.
+- El estado de conexión indica que las perspectivas no se pueden leer: el sitio del SPC no responde. No se publica
+  nada hasta que vuelva a responder; nuevo intento cada 15 minutos.
+
+## Límites
+
+- Una previsión de los próximos días, no un aviso: pueden formarse tormentas fuera de las zonas trazadas por el SPC.
+- Desarrollada sin una jornada de tormentas severas en curso: las pruebas usan las perspectivas reales del 27 de
+  abril de 2026 (riesgo moderado) y del 7 de noviembre de 2026. Sus comentarios son bienvenidos.
+- La probabilidad de un fenómeno se refiere a 40 km alrededor de la casa, tal como la define el SPC, no a la casa
+  misma.
