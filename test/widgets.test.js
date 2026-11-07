@@ -1,77 +1,126 @@
+// -----------------------------------------------------------------------------
+// The `storm_outlook` widget: content valid for the core (vocabulary and
+// budget, checked by the SDK's validator), Gladys' device names, settings that
+// hide the optional blocks.
+// -----------------------------------------------------------------------------
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateWidgetContent } from '@gladysassistant/integration-sdk';
-import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { buildDiscoveredDevices } from '../src/devices/index.js';
-import { simulateLanSession } from '../src/devices/plug.js';
-import { DEMO_STATUS_WIDGET, WIDGETS, refreshWidgets } from '../src/widgets.js';
-import { normalizeConfig } from '../src/config.js';
+import { WIDGET_KEY } from '../src/monitor.js';
+import { hazardsValue, levelColor } from '../src/widgets.js';
+import { createWorld, fixtureFetch, HOUSES, response } from './helpers/world.js';
 
-const gladys = createFakeGladys();
-const config = normalizeConfig();
-const demoStatus = WIDGETS[DEMO_STATUS_WIDGET];
+const LANGS = ['en', 'fr', 'de', 'es'];
 
-// What the SDK passes to onWidgetGet, plus the config index.js adds.
-const getContent = (cfg = config) =>
-  demoStatus.get(gladys, { settings: {}, language: 'en', units: 'metric', config: cfg });
+async function get(world, settings = {}, language = 'en') {
+  const ack = await world.fake.widgetGet(WIDGET_KEY, { settings, language, units: 'us' });
+  assert.equal(ack.success, true, ack.error);
+  const content = ack.data.content;
+  assert.deepEqual(validateWidgetContent(content), [], JSON.stringify(content));
+  return content.components;
+}
 
-test('the demo_status content is rendered exactly as sent', async () => {
-  // [] = nothing the core would drop, truncate or trim to the content budget.
-  assert.deepEqual(validateWidgetContent(await getContent()), []);
+test('a Moderate day: heading, the three days, the probabilities, the source and the link', async () => {
+  const world = await createWorld({
+    state: { set: '2026-04-27' },
+    houses: [HOUSES.stLouis],
+    created: ['st-louis'],
+  });
+  try {
+    const components = await get(world);
+    assert.deepEqual(components[0], {
+      type: 'text',
+      variant: 'heading',
+      text: 'Severe storms today: 4 · Moderate',
+    });
+    const status = components.find((c) => c.type === 'status');
+    assert.deepEqual(
+      status.items.map((i) => [i.label, i.value, i.color]),
+      [
+        ['Today', '4 · Moderate', 'danger'],
+        ['Tomorrow', 'General thunderstorms', 'info'],
+        ['In 2 days', 'No severe risk', 'neutral'],
+        ['Tornado / hail / wind today', '15 / 30 / 45% · CIG2', 'neutral'],
+        ['Tornado / hail / wind tomorrow', '0 / 0 / 0%', 'neutral'],
+      ],
+    );
+    assert.match(
+      components.find((c) => c.variant === 'caption').text,
+      /^SPC \(NOAA\), .* not an official warning$/,
+    );
+    assert.equal(components.at(-1).link.url, 'https://www.spc.noaa.gov/products/outlook/');
+    for (const language of LANGS) {
+      await get(world, {}, language);
+    }
+  } finally {
+    await world.cleanup();
+  }
 });
 
-test('the degraded plug connection content is valid too', async () => {
-  simulateLanSession(false);
+test('the settings hide the probabilities and the button; a house can be chosen', async () => {
+  const world = await createWorld({
+    houses: [HOUSES.midland, HOUSES.forks],
+    created: ['midland', 'forks'],
+  });
   try {
-    const content = await getContent();
-    assert.deepEqual(validateWidgetContent(content), []);
-    const status = content.components.find((component) => component.type === 'status');
-    assert.ok(
-      status.items.some((item) => item.color === 'warning'),
-      'degraded shows a warning',
+    const forks = world.gladys.externalIds('house', 'forks').device;
+    const components = await get(world, {
+      house: forks,
+      show_probabilities: false,
+      show_link: false,
+    });
+    assert.equal(
+      components.some((c) => c.type === 'button'),
+      false,
+    );
+    const status = components.find((c) => c.type === 'status');
+    assert.deepEqual(
+      status.items.map((i) => i.value),
+      ['1 · Marginal', 'General thunderstorms', 'No severe risk'],
+    );
+    // No heading below Slight.
+    assert.equal(
+      components.some((c) => c.variant === 'heading'),
+      false,
     );
   } finally {
-    simulateLanSession(true);
+    await world.cleanup();
   }
 });
 
-test('the live tiles reference features the integration publishes', async () => {
-  const featureIds = new Set(
-    buildDiscoveredDevices(gladys, config).flatMap((device) =>
-      device.features.map((feature) => feature.external_id),
-    ),
+test('no device, a deleted house, an unreadable source: a plain text', async () => {
+  let world = await createWorld({ houses: [HOUSES.forks] });
+  let components = await get(world, {}, 'fr');
+  assert.match(components[0].text, /Découverte/);
+  components = await get(world, { house: world.gladys.externalIds('house', 'gone').device });
+  assert.equal(components[0].text, 'This house is no longer followed.');
+  await world.cleanup();
+
+  const fetch = fixtureFetch({ overrides: [[() => true, () => response(500)]] });
+  world = await createWorld({ houses: [HOUSES.forks], created: ['forks'], fetch });
+  components = await get(world);
+  assert.equal(components[0].text, 'The SPC outlooks cannot be read for now.');
+  await world.cleanup();
+});
+
+test('colours follow the SPC scale within the closed palette', () => {
+  assert.deepEqual(
+    [0, 1, 2, 3, 4, 5].map((level) => levelColor(level)),
+    ['neutral', 'success', 'warning', 'warning', 'danger', 'danger'],
   );
-  const liveTiles = (await getContent()).components.filter((c) => c.device_feature);
-  assert.ok(liveTiles.length > 0, 'the template demonstrates a device-bound tile');
-  for (const tile of liveTiles) {
-    assert.ok(featureIds.has(tile.device_feature), `unknown feature ${tile.device_feature}`);
+  assert.equal(levelColor(0, true), 'info');
+  assert.equal(levelColor(null), 'neutral');
+});
+
+test('the probability line fits a status value in every language', () => {
+  const hazards = {
+    tornado: { probability: 60, intensity: 3 },
+    hail: { probability: 60, intensity: 2 },
+    wind: { probability: 90, intensity: 2 },
+  };
+  for (const language of LANGS) {
+    assert.ok(hazardsValue(hazards, language).length <= 40);
   }
-});
-
-test('every button action of the content is handled and answers a short toast', async () => {
-  const buttons = (await getContent()).components.filter((c) => c.type === 'button' && c.action);
-  assert.ok(buttons.length > 0, 'the template demonstrates a widget action');
-  for (const { action } of buttons) {
-    const message = await demoStatus.action(gladys, {
-      actionKey: action.key,
-      params: action.params ?? {},
-      settings: {},
-      config,
-    });
-    assert.ok(message.en, 'the toast carries at least the mandatory `en` text');
-    assert.ok(message.en.length <= 200, 'toasts are capped at 200 characters');
-  }
-});
-
-test('an unknown widget action fails, so the user sees the error', async () => {
-  await assert.rejects(
-    demoStatus.action(gladys, { actionKey: 'unknown', params: {}, settings: {}, config }),
-    /Unknown widget action/,
-  );
-});
-
-test('refreshWidgets nudges every widget', () => {
-  const fresh = createFakeGladys();
-  refreshWidgets(fresh);
-  assert.deepEqual(fresh.fake.widgetRefreshes, Object.keys(WIDGETS));
+  assert.equal(hazardsValue({ tornado: { probability: 5, intensity: 0 } }, 'en'), 'Not available');
 });

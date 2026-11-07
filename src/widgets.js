@@ -1,169 +1,209 @@
 // -----------------------------------------------------------------------------
-// Dashboard widgets (SDK v0.14+, Gladys 5.1+).
+// Dashboard widget (manifest `widgets`, Gladys 5.1+): `storm_outlook`.
 //
-// A widget puts the integration's own data on the Gladys dashboard without a
-// dedicated core widget. The manifest `widgets` field declares its identity
-// (key, label, icon, optional per-instance `settings`); at runtime the
-// integration returns a DECLARATIVE content — `text`, `value`, `gauge`,
-// `status`, `chart`, `card-list`, `image`, `button` — that the core renders
-// with its own theme, dark mode and translations. No HTML, no CSS.
+// For one house (the one chosen, else the first created): a heading when today
+// or tomorrow reaches Slight (2), one status line per day with its category,
+// coloured after the SPC scale as far as the closed palette of the core goes
+// (green Marginal, yellow Slight and Enhanced, red Moderate and High), the
+// tornado / hail / wind probabilities of today and tomorrow, the source with
+// its time of issue, and a button to the SPC outlooks. The probabilities and
+// the button each have a setting to hide them.
 //
-// Each entry of WIDGETS is keyed by the widget `key` and exposes:
-//   - get(gladys, { settings, language, units, config }): the content,
-//     registered by index.js with `gladys.onWidgetGet(key, ...)`;
-//   - action(gladys, { actionKey, params, settings, config }) (optional): a
-//     tapped `button` carrying an `action`, registered with
-//     `gladys.onWidgetAction`.
-//
-// Check your contents in the tests with `validateWidgetContent` (exported by
-// the SDK, see test/widgets.test.js), or run with DEBUG=gladys-integration-sdk
-// to have the SDK log every violation of the vocabulary and the budget.
+// Budget: 2 texts, 1 status, 1 button.
 // -----------------------------------------------------------------------------
 
-import {
-  createLogger,
-  DEVICE_FEATURE_CATEGORIES,
-  DEVICE_TRANSPORTS,
-  WIDGET_COLORS,
-} from '@gladysassistant/integration-sdk';
-import { identifyDevice } from './devices/index.js';
-import { weatherStation } from './devices/weatherStation.js';
-import { plug } from './devices/plug.js';
-import { light } from './devices/light.js';
+import { WIDGET_COLORS } from '@gladysassistant/integration-sdk';
+import { selectorOfExternalId } from './devices.js';
+import { LEVEL_NAMES, levelText, percent } from './messages.js';
+import { WIDGET_KEY } from './monitor.js';
+import { formatDateTime } from './time.js';
 
-const logger = createLogger({ name: 'widgets' });
+export const TTL_SECONDS = 900;
+export const OUTLOOK_PAGE = 'https://www.spc.noaa.gov/products/outlook/';
+const MAX_STATUS_TEXT = 40;
 
-// Widget key, as declared in the manifest `widgets` field.
-export const DEMO_STATUS_WIDGET = 'demo_status';
-
-// Keys of the `button` actions the demo_status content declares.
-const DEMO_STATUS_ACTIONS = { IDENTIFY_LIGHT: 'identify_light' };
-
-// How the plug transport reads in the status list.
-const TRANSPORT_STATUS = {
-  [DEVICE_TRANSPORTS.LOCAL]: { value: { en: 'Local', fr: 'Locale' }, color: WIDGET_COLORS.SUCCESS },
-  [DEVICE_TRANSPORTS.CLOUD]: { value: { en: 'Cloud', fr: 'Cloud' }, color: WIDGET_COLORS.INFO },
-  [DEVICE_TRANSPORTS.UNREACHABLE]: {
-    value: { en: 'Unreachable', fr: 'Injoignable' },
-    color: WIDGET_COLORS.DANGER,
+export const TEXT = {
+  empty: {
+    en: 'No device yet: create the device of your house in the Discover tab of the integration.',
+    fr: "Aucun appareil pour l'instant : créez celui de votre maison dans l'onglet Découverte de l'intégration.",
+    de: 'Noch kein Gerät: Lege das Gerät deines Hauses im Tab „Entdecken“ der Integration an.',
+    es: 'Aún no hay dispositivo: cree el de su casa en la pestaña Descubrir de la integración.',
+  },
+  gone: {
+    en: 'This house is no longer followed.',
+    fr: "Cette maison n'est plus suivie.",
+    de: 'Dieses Haus wird nicht mehr verfolgt.',
+    es: 'Esta casa ya no se sigue.',
+  },
+  unavailable: {
+    en: 'The SPC outlooks cannot be read for now.',
+    fr: 'Les perspectives du SPC sont illisibles pour le moment.',
+    de: 'Die Ausblicke des SPC sind gerade nicht lesbar.',
+    es: 'Las perspectivas del SPC no se pueden leer por ahora.',
+  },
+  alert: {
+    en: 'Severe storms {day}: {level}',
+    fr: 'Orages violents {day} : {level}',
+    de: 'Unwetter {day}: {level}',
+    es: 'Tormentas severas {day}: {level}',
+  },
+  today: { en: 'Today', fr: "Aujourd'hui", de: 'Heute', es: 'Hoy' },
+  tomorrow: { en: 'Tomorrow', fr: 'Demain', de: 'Morgen', es: 'Mañana' },
+  later: { en: 'In 2 days', fr: 'Dans 2 jours', de: 'In 2 Tagen', es: 'En 2 días' },
+  hazardsToday: {
+    en: 'Tornado / hail / wind today',
+    fr: "Tornade / grêle / rafales aujourd'hui",
+    de: 'Tornado / Hagel / Böen heute',
+    es: 'Tornado / granizo / rachas hoy',
+  },
+  hazardsTomorrow: {
+    en: 'Tornado / hail / wind tomorrow',
+    fr: 'Tornade / grêle / rafales demain',
+    de: 'Tornado / Hagel / Böen morgen',
+    es: 'Tornado / granizo / rachas mañana',
+  },
+  notIssued: {
+    en: 'Not available',
+    fr: 'Indisponible',
+    de: 'Nicht verfügbar',
+    es: 'No disponible',
+  },
+  issued: {
+    en: 'SPC (NOAA), {date} · not an official warning',
+    fr: 'SPC (NOAA), {date} · pas une alerte officielle',
+    de: 'SPC (NOAA), {date} · keine amtliche Warnung',
+    es: 'SPC (NOAA), {date} · no es un aviso oficial',
+  },
+  link: {
+    en: 'SPC outlooks',
+    fr: 'Perspectives du SPC',
+    de: 'SPC-Ausblicke',
+    es: 'Perspectivas del SPC',
   },
 };
 
-// A live tile references a feature by its external_id: read it from the
-// discovery payload itself, so the widget and the device never disagree.
-function featureExternalId(gladys, config, blueprint, category) {
-  const device = blueprint.buildDevice(gladys, config);
-  return device.features.find((feature) => feature.category === category).external_id;
+const t = (text, language) => text[language] ?? text.en;
+const clip = (text, max = MAX_STATUS_TEXT) =>
+  text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+const fill = (text, values) =>
+  Object.entries(values).reduce((out, [key, value]) => out.replace(`{${key}}`, value), text);
+
+/** Widget colour of an SPC category (closed palette of the core). */
+export function levelColor(level, thunder = false) {
+  if (level === null || level === undefined) {
+    return WIDGET_COLORS.NEUTRAL;
+  }
+  if (level === 0) {
+    return thunder ? WIDGET_COLORS.INFO : WIDGET_COLORS.NEUTRAL;
+  }
+  if (level === 1) {
+    return WIDGET_COLORS.SUCCESS;
+  }
+  return level <= 3 ? WIDGET_COLORS.WARNING : WIDGET_COLORS.DANGER;
 }
 
-function plugConnectionStatus(gladys, config) {
-  const { transport, degraded } = plug.transport(gladys, config);
-  const { value, color } = TRANSPORT_STATUS[transport];
-  if (degraded) {
-    return {
-      value: { en: `${value.en} (degraded mode)`, fr: `${value.fr} (mode dégradé)` },
-      color: WIDGET_COLORS.WARNING,
-    };
+/** "5 / 15 / 30 %", followed by " · CIG2" when an intensity group applies. */
+export function hazardsValue(hazards, language) {
+  const values = ['tornado', 'hail', 'wind'].map((name) => hazards[name]?.probability);
+  if (values.some((value) => !Number.isFinite(value))) {
+    return t(TEXT.notIssued, language);
   }
-  return { value, color };
+  const intensity = Math.max(...['tornado', 'hail', 'wind'].map((n) => hazards[n].intensity ?? 0));
+  const text = `${values.slice(0, 2).join(' / ')} / ${percent(values[2], language)}`;
+  return clip(intensity > 0 ? `${text} · CIG${intensity}` : text);
+}
+
+function content(monitor, house, language, settings, houseName = null) {
+  const outlooks = monitor.outlooks(house);
+  if (Object.keys(outlooks).length === 0) {
+    return [{ type: 'text', variant: 'body', text: t(TEXT.unavailable, language) }];
+  }
+  const components = [];
+  const labels = { 1: TEXT.today, 2: TEXT.tomorrow, 3: TEXT.later };
+  const alertDay = [1, 2].find((day) => outlooks[day]?.level >= 2);
+  if (alertDay) {
+    components.push({
+      type: 'text',
+      variant: 'heading',
+      text: fill(t(TEXT.alert, language), {
+        day: t(labels[alertDay], language).toLowerCase(),
+        level: levelText(outlooks[alertDay].level, language),
+      }),
+    });
+  }
+  const items = [1, 2, 3].map((day) => {
+    const outlook = outlooks[day];
+    return {
+      label: t(labels[day], language),
+      value: outlook
+        ? clip(levelText(outlook.level, language, outlook.thunder))
+        : t(TEXT.notIssued, language),
+      color: levelColor(outlook?.level, outlook?.thunder),
+      icon: outlook?.level > 0 ? 'alert-triangle' : 'cloud-lightning',
+    };
+  });
+  if (settings.show_probabilities !== false) {
+    for (const [day, label] of [
+      [1, TEXT.hazardsToday],
+      [2, TEXT.hazardsTomorrow],
+    ]) {
+      if (outlooks[day]) {
+        items.push({
+          label: t(label, language),
+          value: hazardsValue(outlooks[day].hazards, language),
+          color: WIDGET_COLORS.NEUTRAL,
+          icon: 'wind',
+        });
+      }
+    }
+  }
+  components.push({ type: 'status', items });
+  const issued = outlooks[1]?.issued ?? Math.max(...Object.values(outlooks).map((o) => o.issued));
+  if (Number.isFinite(issued)) {
+    components.push({
+      type: 'text',
+      variant: 'caption',
+      text:
+        // Several houses: say which one (its name in Gladys).
+        (houseName ? `${clip(houseName, 30)} · ` : '') +
+        fill(t(TEXT.issued, language), { date: formatDateTime(issued, language) }),
+    });
+  }
+  if (settings.show_link !== false) {
+    components.push({
+      type: 'button',
+      label: t(TEXT.link, language),
+      icon: 'external-link',
+      style: 'secondary',
+      link: { url: OUTLOOK_PAGE },
+    });
+  }
+  return components;
 }
 
 export const WIDGETS = {
-  [DEMO_STATUS_WIDGET]: {
-    // `settings` holds the per-instance values of the declared `settings`
-    // (none here); `language` and `units` are those of the user viewing the
-    // dashboard, for the values you format yourself. Multi-language objects
-    // (`{ en, fr }`) are picked by the core, like everywhere else.
-    async get(gladys, { config }) {
-      logger.debug(`onWidgetGet <- ${DEMO_STATUS_WIDGET}`);
-      return {
-        // Reload policy: the computed parts below only change with the
-        // config, and index.js nudges the widget on every (re)connection and
-        // config update (see refreshWidgets) — the TTL is just a safety net.
-        ttl_seconds: 300,
-        components: [
-          // Device-bound tiles: LIVE, they follow the published states over
-          // the core's real-time path. No TTL, no nudge involved.
-          {
-            type: 'value',
-            label: { en: 'Temperature', fr: 'Température' },
-            icon: 'thermometer',
-            device_feature: featureExternalId(
-              gladys,
-              config,
-              weatherStation,
-              DEVICE_FEATURE_CATEGORIES.TEMPERATURE_SENSOR,
-            ),
-          },
-          {
-            type: 'value',
-            label: { en: 'Office plug', fr: 'Prise du bureau' },
-            icon: 'zap',
-            device_feature: featureExternalId(
-              gladys,
-              config,
-              plug,
-              DEVICE_FEATURE_CATEGORIES.ENERGY_SENSOR,
-            ),
-          },
-          // Computed rows: what the integration knows that no device feature
-          // carries. Served from the core cache until the TTL or a nudge.
-          {
-            type: 'status',
-            items: [
-              {
-                label: { en: 'Plug connection', fr: 'Connexion de la prise' },
-                icon: 'wifi',
-                ...plugConnectionStatus(gladys, config),
-              },
-              {
-                label: { en: 'Observed location', fr: 'Position observée' },
-                icon: 'map-pin',
-                value: `${config.latitude.toFixed(2)}, ${config.longitude.toFixed(2)}`,
-                color: WIDGET_COLORS.NEUTRAL,
-              },
-            ],
-          },
-          // `params` are declared HERE and sent back as-is: the handler never
-          // receives user input (a dashboard can hang on a public wall).
-          {
-            type: 'button',
-            label: { en: 'Identify the light', fr: 'Identifier la lampe' },
-            icon: 'eye',
-            style: 'secondary',
-            action: {
-              key: DEMO_STATUS_ACTIONS.IDENTIFY_LIGHT,
-              params: { device: light.deviceExternalId(gladys) },
-            },
-          },
-        ],
-      };
-    },
-
-    // Resolve an optional toast (string or multi-language object, ≤ 200
-    // characters). After a successful action the core drops the cached
-    // content and every open dashboard refetches it: no nudge needed.
-    async action(gladys, { actionKey, params, config }) {
-      logger.info(`onWidgetAction <- ${DEMO_STATUS_WIDGET}.${actionKey}`);
-      if (actionKey === DEMO_STATUS_ACTIONS.IDENTIFY_LIGHT) {
-        return identifyDevice(gladys, params.device, config);
+  [WIDGET_KEY]: {
+    async get(monitor, { settings, language = 'en' } = {}) {
+      const lang = LEVEL_NAMES[language] ? language : 'en';
+      const created = monitor.created();
+      const many = created.length > 1;
+      const chosen =
+        typeof settings?.house === 'string' && settings.house
+          ? selectorOfExternalId(monitor.gladys, settings.house)
+          : null;
+      let components;
+      if (chosen) {
+        const house = created.find((h) => h.selector === chosen);
+        components = house
+          ? content(monitor, house, lang, settings ?? {}, many ? monitor.deviceName(house) : null)
+          : [{ type: 'text', variant: 'body', text: t(TEXT.gone, lang) }];
+      } else if (created.length === 0) {
+        components = [{ type: 'text', variant: 'body', text: t(TEXT.empty, lang) }];
+      } else {
+        const name = many ? monitor.deviceName(created[0]) : null;
+        components = content(monitor, created[0], lang, settings ?? {}, name);
       }
-      // Throwing acks the action as failed: the message reaches the user.
-      throw new Error(`Unknown widget action: ${actionKey}`);
+      return { ttl_seconds: TTL_SECONDS, components };
     },
   },
 };
-
-/**
- * Freshness nudge: ask the core to re-pull every widget NOW instead of
- * waiting for the content TTL. Call it when you KNOW a computed content
- * changed (here: the config, which drives the plug transport and the observed
- * location) — and after every (re)connection, since the nudges are
- * fire-and-forget: rate-limited core-side to 1 per 10 s per widget, dropped
- * silently while disconnected.
- */
-export function refreshWidgets(gladys) {
-  for (const key of Object.keys(WIDGETS)) {
-    gladys.requestWidgetRefresh(key);
-  }
-}

@@ -30,6 +30,11 @@ Gladys before reporting a problem.
 
 In scope: the code of this repository and the Docker image it publishes.
 
+The integration reads the location of the houses of Gladys (manifest `location: true`) and uses it only inside
+the container: it is never sent anywhere nor written to the logs. It stores in `/data/spc.json` the last
+category and tornado probability seen for each house selector and each day (no coordinates). It holds no secret,
+and only makes outgoing HTTPS requests to `www.spc.noaa.gov`.
+
 Out of scope: Gladys Assistant itself (see its
 [security policy](https://github.com/GladysAssistant/Gladys/security/policy)),
-and the third-party services and devices the integration talks to.
+and the NOAA services the integration reads.

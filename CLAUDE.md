@@ -16,8 +16,8 @@ its only runtime dependency. It started from the official JavaScript template.
 ```bash
 npm install
 npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
+node --test test/outlook.test.js          # one file
+node --test --test-name-pattern "widget"  # tests whose name matches
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
 npm run format                            # Prettier, fix in place
@@ -31,16 +31,21 @@ pushing.
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+index.js                          SDK wiring only: src/app.js registers the handlers before connect()
+src/app.js                        every SDK handler -> the monitor (also used by the tests)
+src/monitor.js                    15-minute cycle, houses, states, scene triggers, connection status
+src/source.js                     SPC GeoJSON layers, conditional requests (ETag / Last-Modified)
+src/outlook.js                    reads a layer, point in polygon, evaluates a day at a house
+src/devices.js                    one device per located house in the contiguous US, features, states
+src/widgets.js                    dashboard widget handler (manifest `widgets`)
+src/messages.js                   texts in en/fr/de/es (categories, summary, statuses)
+src/time.js                       dates in the time zone of Gladys
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+src/store.js                      /data/spc.json (last category and tornado odds per house and day)
+gladys-assistant-integration.json manifest: location, config_schema, triggers, widget...
+docs/{en,fr,de,es}.md             user documentation, re-hosted by Gladys
+test/                             node --test, against the SDK's fake Gladys; real SPC layers in
+                                  test/fixtures/<date>/ under their file names
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
 
@@ -251,3 +256,23 @@ long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige 
 - Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
 - Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
   vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
+
+## Perspectives du SPC (gladys-spc)
+
+- Couches GeoJSON de `https://www.spc.noaa.gov/products/outlook/` (`dayNotlk_<couche>.lyr.geojson`), sans clé,
+  domaine public, CloudFront avec `ETag` et `Last-Modified` : requêtes conditionnelles, 304 entre deux émissions.
+  Onze fichiers par cycle : `cat`, `torn`, `hail`, `wind` des jours 1 et 2, `cat`, `prob`, `cigprob` du jour 3.
+- **Depuis mars 2026, les zones hachurées « significatives » sont remplacées par les groupes d'intensité
+  conditionnelle** (`LABEL` `CIG1` à `CIG3`), présents **dans les couches `torn`/`hail`/`wind` elles-mêmes**
+  (et en double dans `cigtorn`…), et dans `day3otlk_cigprob` pour le jour 3. Les anciennes couches `_sig*` et
+  `day2otlk_prob` sont toujours servies mais **figées** (mars 2026, voire 2020) : ne pas les lire. Garde-fou : une
+  couche dont l'`EXPIRE` diffère de celui de la couche `cat` du même jour est ignorée.
+- Une couche vide = une seule feature à `GeometryCollection` vide, avec `LABEL` « Less Than 2% All Areas ».
+  Catégories par `LABEL` (TSTM, MRGL, SLGT, ENH, MDT, HIGH ; `DN` vaut 2, 3, 4, 5, 6, 8) ; probabilités par `LABEL`
+  décimal (« 0.15 »).
+- Journée convective de 12 h UTC à 12 h UTC : la date suivie est celle de `EXPIRE − 24 h` (la mise à jour de 01 h UTC
+  du jour 1 commence le jour civil suivant). Les déclencheurs comparent la même date d'un créneau à l'autre (le jour 2
+  d'hier est le jour 1 d'aujourd'hui).
+- Position : `getHouses()` avec `location: true` ; maison hors des États-Unis contigus ignorée (statut explicite).
+  Le heartbeat de `publishChangedStates` suit l'horloge réelle, pas l'horloge injectée : un test ne peut que vérifier
+  l'option passée.

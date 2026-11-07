@@ -1,177 +1,758 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Severe storm outlook (SPC)",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "NOAA Storm Prediction Center severe thunderstorm outlook for your house, today to day 3.",
+    "fr": "Risque d'orages violents du Storm Prediction Center (NOAA) chez vous, sur trois jours.",
+    "de": "Unwetterausblick des Storm Prediction Center (NOAA) für dein Haus, heute bis Tag 3.",
+    "es": "Riesgo de tormentas severas del Storm Prediction Center (NOAA) en su casa, a tres días."
   },
   "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
-  "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "docker_image": "ghcr.io/guim31/gladys-spc:1.0.0",
+  "gladys_version": ">=5.3.0",
+  "cover_image": "https://raw.githubusercontent.com/guim31/gladys-spc/main/cover.png",
+  "categories": ["environment"],
+  "countries": ["US"],
+  "transports": ["cloud"],
+  "location": true,
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your house",
+        "fr": "Votre maison",
+        "de": "Dein Haus",
+        "es": "Su casa"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "The integration reads the location of your houses in Gladys and evaluates the SPC outlooks there, inside the container: the location never leaves Gladys. One device per house in the contiguous United States: create it in the Discover tab.",
+        "fr": "L'intégration lit la position de vos maisons dans Gladys et y évalue les perspectives du SPC, dans le conteneur : la position ne quitte jamais Gladys. Un appareil par maison située aux États-Unis contigus : créez-le dans l'onglet Découverte.",
+        "de": "Die Integration liest den Standort deiner Häuser in Gladys und wertet die SPC-Ausblicke dort im Container aus: Der Standort verlässt Gladys nie. Ein Gerät pro Haus in den angrenzenden USA: Lege es im Tab „Entdecken“ an.",
+        "es": "La integración lee la ubicación de sus casas en Gladys y evalúa allí las perspectivas del SPC, dentro del contenedor: la ubicación nunca sale de Gladys. Un dispositivo por casa en los Estados Unidos contiguos: créelo en la pestaña Descubrir."
+      }
+    },
+    {
+      "key": "about",
+      "type": "section",
+      "label": {
+        "en": "Sources and limits",
+        "fr": "Sources et limites",
+        "de": "Quellen und Grenzen",
+        "es": "Fuentes y límites"
+      },
+      "description": {
+        "en": "Convective outlooks of the NOAA Storm Prediction Center (public domain), read every 15 minutes without an account. A forecast, not an official warning service: follow the warnings of the National Weather Service. Not affiliated with NOAA.",
+        "fr": "Perspectives convectives du Storm Prediction Center de la NOAA (domaine public), lues toutes les 15 minutes sans compte. Une prévision, pas un service d'alerte officiel : suivez les alertes du National Weather Service. Non affiliée à la NOAA.",
+        "de": "Konvektive Ausblicke des Storm Prediction Center der NOAA (gemeinfrei), alle 15 Minuten ohne Konto gelesen. Eine Vorhersage, kein amtlicher Warndienst: Folge den Warnungen des National Weather Service. Nicht mit der NOAA verbunden.",
+        "es": "Perspectivas convectivas del Storm Prediction Center de la NOAA (dominio público), leídas cada 15 minutos sin cuenta. Una previsión, no un servicio de avisos oficial: siga los avisos del National Weather Service. Sin afiliación con la NOAA."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://www.spc.noaa.gov/products/outlook/",
+          "label": {
+            "en": "SPC convective outlooks",
+            "fr": "Perspectives du SPC",
+            "de": "SPC-Ausblicke",
+            "es": "Perspectivas del SPC"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
-    },
-    {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
+      "key": "language",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
-      "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "label": {
+        "en": "Language of the feature names",
+        "fr": "Langue des noms de fonctionnalités",
+        "de": "Sprache der Funktionsnamen",
+        "es": "Idioma de los nombres de las funciones"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "Names given to the features of new devices (Storm risk today…), and language of the summary and of the scene variables.",
+        "fr": "Noms donnés aux fonctionnalités des nouveaux appareils (Risque orageux aujourd'hui…), et langue du résumé et des variables de scène.",
+        "de": "Namen der Funktionen neuer Geräte (Unwetterrisiko heute…) und Sprache der Zusammenfassung und der Szenenvariablen.",
+        "es": "Nombres de las funciones de los nuevos dispositivos (Riesgo de tormentas hoy…) e idioma del resumen y de las variables de escena."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
-    }
-  ],
-  "actions": [
-    {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
+      "default": "fr",
+      "options": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
+          }
         }
       ]
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "risk_reached",
+      "label": {
+        "en": "Severe storm risk reaches a category",
+        "fr": "Le risque d'orages violents atteint une catégorie",
+        "de": "Unwetterrisiko erreicht eine Kategorie",
+        "es": "El riesgo de tormentas alcanza una categoría"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "A new SPC outlook raises the category of a day at your house to the chosen level or above (once, when crossed upwards). Slight (2) is a good start.",
+        "fr": "Une nouvelle perspective du SPC porte la catégorie d'un jour chez vous au niveau choisi ou au-delà (une fois, au franchissement). Faible (2) est un bon début.",
+        "de": "Ein neuer SPC-Ausblick hebt die Kategorie eines Tages bei dir auf die gewählte Stufe oder höher (einmal, beim Überschreiten). Gering (2) ist ein guter Anfang.",
+        "es": "Una nueva perspectiva del SPC eleva la categoría de un día en su casa al nivel elegido o más (una vez, al superarlo). Ligero (2) es un buen comienzo."
       },
       "fields": [
         {
-          "key": "device",
+          "key": "house",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "required": false,
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          }
         },
         {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "key": "day",
+          "type": "select",
+          "required": false,
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          },
+          "description": {
+            "en": "Leave empty for any day.",
+            "fr": "Laissez vide pour n'importe quel jour.",
+            "de": "Leer lassen für jeden Tag.",
+            "es": "Déjelo vacío para cualquier día."
+          },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "1",
+              "label": {
+                "en": "Today",
+                "fr": "Aujourd'hui",
+                "de": "Heute",
+                "es": "Hoy"
+              }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "Tomorrow",
+                "fr": "Demain",
+                "de": "Morgen",
+                "es": "Mañana"
+              }
+            },
+            {
+              "value": "3",
+              "label": {
+                "en": "In 2 days",
+                "fr": "Dans 2 jours",
+                "de": "In 2 Tagen",
+                "es": "En 2 días"
+              }
+            }
+          ]
+        },
+        {
+          "key": "threshold",
+          "type": "select",
+          "required": true,
+          "label": {
+            "en": "Category reached",
+            "fr": "Catégorie atteinte",
+            "de": "Erreichte Kategorie",
+            "es": "Categoría alcanzada"
+          },
+          "options": [
+            {
+              "value": "1",
+              "label": {
+                "en": "1 · Marginal",
+                "fr": "1 · Marginal",
+                "de": "1 · Marginal",
+                "es": "1 · Marginal"
+              }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "2 · Slight",
+                "fr": "2 · Faible",
+                "de": "2 · Gering",
+                "es": "2 · Ligero"
+              }
+            },
+            {
+              "value": "3",
+              "label": {
+                "en": "3 · Enhanced",
+                "fr": "3 · Accru",
+                "de": "3 · Erhöht",
+                "es": "3 · Mejorado"
+              }
+            },
+            {
+              "value": "4",
+              "label": {
+                "en": "4 · Moderate",
+                "fr": "4 · Modéré",
+                "de": "4 · Mäßig",
+                "es": "4 · Moderado"
+              }
+            },
+            {
+              "value": "5",
+              "label": {
+                "en": "5 · High",
+                "fr": "5 · Élevé",
+                "de": "5 · Hoch",
+                "es": "5 · Alto"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "house_name",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          }
+        },
+        {
+          "key": "day_name",
+          "type": "string",
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          }
+        },
+        {
+          "key": "date",
+          "type": "string",
+          "label": {
+            "en": "Date of the outlook",
+            "fr": "Date de la perspective",
+            "de": "Datum des Ausblicks",
+            "es": "Fecha de la perspectiva"
+          }
+        },
+        {
+          "key": "level",
+          "type": "number",
+          "label": {
+            "en": "Category (0-5)",
+            "fr": "Catégorie (0-5)",
+            "de": "Kategorie (0-5)",
+            "es": "Categoría (0-5)"
+          }
+        },
+        {
+          "key": "level_name",
+          "type": "string",
+          "label": {
+            "en": "Category name",
+            "fr": "Nom de la catégorie",
+            "de": "Name der Kategorie",
+            "es": "Nombre de la categoría"
+          }
+        },
+        {
+          "key": "summary",
+          "type": "string",
+          "label": {
+            "en": "Summary",
+            "fr": "Résumé",
+            "de": "Zusammenfassung",
+            "es": "Resumen"
+          }
         }
       ]
-    }
-  ],
-  "scene_actions": [
+    },
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "risk_increased",
+      "label": {
+        "en": "Severe storm risk upgraded",
+        "fr": "Risque d'orages violents relevé",
+        "de": "Unwetterrisiko hochgestuft",
+        "es": "Riesgo de tormentas elevado"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "A new SPC outlook raises the category of a day already forecast at your house, whatever the level.",
+        "fr": "Une nouvelle perspective du SPC relève la catégorie d'un jour déjà prévu chez vous, quel que soit le niveau.",
+        "de": "Ein neuer SPC-Ausblick stuft die Kategorie eines bereits vorhergesagten Tages bei dir hoch, egal auf welche Stufe.",
+        "es": "Una nueva perspectiva del SPC eleva la categoría de un día ya previsto en su casa, sea cual sea el nivel."
+      },
       "fields": [
         {
-          "key": "device",
+          "key": "house",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
+          "required": false,
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          }
+        },
+        {
+          "key": "day",
+          "type": "select",
+          "required": false,
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          },
+          "description": {
+            "en": "Leave empty for any day.",
+            "fr": "Laissez vide pour n'importe quel jour.",
+            "de": "Leer lassen für jeden Tag.",
+            "es": "Déjelo vacío para cualquier día."
+          },
+          "options": [
+            {
+              "value": "1",
+              "label": {
+                "en": "Today",
+                "fr": "Aujourd'hui",
+                "de": "Heute",
+                "es": "Hoy"
+              }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "Tomorrow",
+                "fr": "Demain",
+                "de": "Morgen",
+                "es": "Mañana"
+              }
+            },
+            {
+              "value": "3",
+              "label": {
+                "en": "In 2 days",
+                "fr": "Dans 2 jours",
+                "de": "In 2 Tagen",
+                "es": "En 2 días"
+              }
+            }
+          ]
         }
       ],
-      "outputs": [
+      "variables": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "house_name",
+          "type": "string",
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          }
+        },
+        {
+          "key": "day_name",
+          "type": "string",
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          }
+        },
+        {
+          "key": "date",
+          "type": "string",
+          "label": {
+            "en": "Date of the outlook",
+            "fr": "Date de la perspective",
+            "de": "Datum des Ausblicks",
+            "es": "Fecha de la perspectiva"
+          }
+        },
+        {
+          "key": "level",
+          "type": "number",
+          "label": {
+            "en": "Category (0-5)",
+            "fr": "Catégorie (0-5)",
+            "de": "Kategorie (0-5)",
+            "es": "Categoría (0-5)"
+          }
+        },
+        {
+          "key": "level_name",
+          "type": "string",
+          "label": {
+            "en": "Category name",
+            "fr": "Nom de la catégorie",
+            "de": "Name der Kategorie",
+            "es": "Nombre de la categoría"
+          }
+        },
+        {
+          "key": "summary",
+          "type": "string",
+          "label": {
+            "en": "Summary",
+            "fr": "Résumé",
+            "de": "Zusammenfassung",
+            "es": "Resumen"
+          }
+        },
+        {
+          "key": "previous_level",
+          "type": "number",
+          "label": {
+            "en": "Previous category (0-5)",
+            "fr": "Catégorie précédente (0-5)",
+            "de": "Vorherige Kategorie (0-5)",
+            "es": "Categoría anterior (0-5)"
+          }
+        },
+        {
+          "key": "previous_level_name",
+          "type": "string",
+          "label": {
+            "en": "Previous category name",
+            "fr": "Nom de la catégorie précédente",
+            "de": "Name der vorherigen Kategorie",
+            "es": "Nombre de la categoría anterior"
+          }
+        }
+      ]
+    },
+    {
+      "key": "tornado_probability_reached",
+      "label": {
+        "en": "Tornado probability reaches a level",
+        "fr": "La probabilité de tornade atteint un seuil",
+        "de": "Tornado-Wahrscheinlichkeit erreicht eine Stufe",
+        "es": "La probabilidad de tornado alcanza un umbral"
+      },
+      "description": {
+        "en": "The tornado probability within 25 miles of your house, today or tomorrow, reaches the chosen level (once, when crossed upwards).",
+        "fr": "La probabilité d'une tornade à moins de 40 km de chez vous, aujourd'hui ou demain, atteint le seuil choisi (une fois, au franchissement).",
+        "de": "Die Wahrscheinlichkeit eines Tornados im Umkreis von 40 km um dein Haus, heute oder morgen, erreicht die gewählte Stufe (einmal, beim Überschreiten).",
+        "es": "La probabilidad de un tornado a menos de 40 km de su casa, hoy o mañana, alcanza el umbral elegido (una vez, al superarlo)."
+      },
+      "fields": [
+        {
+          "key": "house",
+          "type": "select",
+          "source": "devices",
+          "required": false,
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          }
+        },
+        {
+          "key": "day",
+          "type": "select",
+          "required": false,
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          },
+          "description": {
+            "en": "Leave empty for any day.",
+            "fr": "Laissez vide pour n'importe quel jour.",
+            "de": "Leer lassen für jeden Tag.",
+            "es": "Déjelo vacío para cualquier día."
+          },
+          "options": [
+            {
+              "value": "1",
+              "label": {
+                "en": "Today",
+                "fr": "Aujourd'hui",
+                "de": "Heute",
+                "es": "Hoy"
+              }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "Tomorrow",
+                "fr": "Demain",
+                "de": "Morgen",
+                "es": "Mañana"
+              }
+            }
+          ]
+        },
+        {
+          "key": "threshold",
+          "type": "select",
+          "required": true,
+          "label": {
+            "en": "Probability reached",
+            "fr": "Probabilité atteinte",
+            "de": "Erreichte Wahrscheinlichkeit",
+            "es": "Probabilidad alcanzada"
+          },
+          "options": [
+            {
+              "value": "2",
+              "label": {
+                "en": "2%",
+                "fr": "2 %",
+                "de": "2 %",
+                "es": "2 %"
+              }
+            },
+            {
+              "value": "5",
+              "label": {
+                "en": "5%",
+                "fr": "5 %",
+                "de": "5 %",
+                "es": "5 %"
+              }
+            },
+            {
+              "value": "10",
+              "label": {
+                "en": "10%",
+                "fr": "10 %",
+                "de": "10 %",
+                "es": "10 %"
+              }
+            },
+            {
+              "value": "15",
+              "label": {
+                "en": "15%",
+                "fr": "15 %",
+                "de": "15 %",
+                "es": "15 %"
+              }
+            },
+            {
+              "value": "30",
+              "label": {
+                "en": "30%",
+                "fr": "30 %",
+                "de": "30 %",
+                "es": "30 %"
+              }
+            },
+            {
+              "value": "45",
+              "label": {
+                "en": "45%",
+                "fr": "45 %",
+                "de": "45 %",
+                "es": "45 %"
+              }
+            },
+            {
+              "value": "60",
+              "label": {
+                "en": "60%",
+                "fr": "60 %",
+                "de": "60 %",
+                "es": "60 %"
+              }
+            }
+          ]
+        }
+      ],
+      "variables": [
+        {
+          "key": "house_name",
+          "type": "string",
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          }
+        },
+        {
+          "key": "day_name",
+          "type": "string",
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          }
+        },
+        {
+          "key": "date",
+          "type": "string",
+          "label": {
+            "en": "Date of the outlook",
+            "fr": "Date de la perspective",
+            "de": "Datum des Ausblicks",
+            "es": "Fecha de la perspectiva"
+          }
+        },
+        {
+          "key": "level",
+          "type": "number",
+          "label": {
+            "en": "Category (0-5)",
+            "fr": "Catégorie (0-5)",
+            "de": "Kategorie (0-5)",
+            "es": "Categoría (0-5)"
+          }
+        },
+        {
+          "key": "level_name",
+          "type": "string",
+          "label": {
+            "en": "Category name",
+            "fr": "Nom de la catégorie",
+            "de": "Name der Kategorie",
+            "es": "Nombre de la categoría"
+          }
+        },
+        {
+          "key": "summary",
+          "type": "string",
+          "label": {
+            "en": "Summary",
+            "fr": "Résumé",
+            "de": "Zusammenfassung",
+            "es": "Resumen"
+          }
+        },
+        {
+          "key": "probability",
+          "type": "number",
+          "label": {
+            "en": "Tornado probability (%)",
+            "fr": "Probabilité de tornade (%)",
+            "de": "Tornado-Wahrscheinlichkeit (%)",
+            "es": "Probabilidad de tornado (%)"
+          }
+        },
+        {
+          "key": "intensity",
+          "type": "number",
+          "label": {
+            "en": "Tornado intensity group (0-3)",
+            "fr": "Groupe d'intensité tornade (0-3)",
+            "de": "Intensitätsgruppe Tornado (0-3)",
+            "es": "Grupo de intensidad de tornado (0-3)"
+          }
         }
       ]
     }
   ],
   "widgets": [
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "storm_outlook",
+      "label": {
+        "en": "Severe storm outlook",
+        "fr": "Risque d'orages violents",
+        "de": "Unwetterausblick",
+        "es": "Riesgo de tormentas"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "SPC category of today, tomorrow and day 3 at a house, with the hazard odds.",
+        "fr": "Catégorie SPC du jour, du lendemain et du surlendemain, avec les probabilités.",
+        "de": "SPC-Kategorie von heute, morgen und übermorgen, mit den Wahrscheinlichkeiten.",
+        "es": "Categoría SPC de hoy, mañana y pasado mañana, con las probabilidades."
+      },
+      "icon": "cloud-lightning",
+      "settings": [
+        {
+          "key": "house",
+          "type": "select",
+          "source": "devices",
+          "required": false,
+          "label": {
+            "en": "House",
+            "fr": "Maison",
+            "de": "Haus",
+            "es": "Casa"
+          },
+          "description": {
+            "en": "Leave empty for the first house.",
+            "fr": "Laissez vide pour la première maison.",
+            "de": "Leer lassen für das erste Haus.",
+            "es": "Déjelo vacío para la primera casa."
+          }
+        },
+        {
+          "key": "show_probabilities",
+          "type": "boolean",
+          "default": true,
+          "label": {
+            "en": "Show the tornado, hail and wind probabilities",
+            "fr": "Afficher les probabilités de tornade, grêle et rafales",
+            "de": "Tornado-, Hagel- und Böenwahrscheinlichkeit zeigen",
+            "es": "Mostrar las probabilidades de tornado, granizo y rachas"
+          }
+        },
+        {
+          "key": "show_link",
+          "type": "boolean",
+          "default": true,
+          "label": {
+            "en": "Show the button to the SPC outlooks",
+            "fr": "Afficher le bouton vers les perspectives du SPC",
+            "de": "Schaltfläche zu den SPC-Ausblicken zeigen",
+            "es": "Mostrar el botón hacia las perspectivas del SPC"
+          }
+        }
+      ]
     }
   ]
 }
