@@ -3,11 +3,16 @@
 //
 // Eleven small files per cycle, every 15 minutes, with conditional requests
 // (If-None-Match / If-Modified-Since): between two issues the SPC answers
-// 304 with no body. A cycle reads the three days together, so a house never
-// mixes the categories of one issue with the probabilities of another.
+// 304 with no body. A layer of another issue than the day's categorical one
+// (read a few seconds apart, or one of the frozen files) is ignored by
+// src/outlook.js. Only a categorical layer that cannot be read is a failure:
+// an optional layer that fails keeps its last copy, or is left out.
 // -----------------------------------------------------------------------------
 
+import { createLogger } from '@gladysassistant/integration-sdk';
 import { parseLayer } from './outlook.js';
+
+const logger = createLogger({ name: 'spc-source' });
 
 export const OUTLOOK_BASE = 'https://www.spc.noaa.gov/products/outlook';
 
@@ -107,26 +112,38 @@ export class Source {
 
   /**
    * The layers of the three days. A day whose categorical layer cannot be read
-   * is null; the error of the first failure is returned with them.
+   * is null, and its error is returned (the first one); an optional layer that
+   * fails keeps its last copy (the expiry check of outlook.js bounds its age),
+   * or is null.
    * @returns {Promise<{days: object, failure: Error|null}>}
    */
   async readAll() {
     const days = {};
     let failure = null;
     for (const [day, files] of Object.entries(LAYER_FILES)) {
+      const layers = {};
       try {
-        const layers = {};
-        for (const [role, name] of Object.entries(files)) {
-          layers[role] = await this.layer(name);
-        }
+        layers.cat = await this.layer(files.cat);
         if (!layers.cat) {
           throw new SourceError(`${files.cat} is not published`);
         }
-        days[day] = layers;
       } catch (err) {
         days[day] = null;
         failure ??= err;
+        continue;
       }
+      for (const [role, name] of Object.entries(files)) {
+        if (role === 'cat') {
+          continue;
+        }
+        try {
+          layers[role] = await this.layer(name);
+        } catch (err) {
+          logger.debug(`Keeping the last copy of ${name}: ${err.message}`);
+          layers[role] = this.cache.get(layerUrl(name))?.layer ?? null;
+        }
+      }
+      days[day] = layers;
     }
     return { days, failure };
   }

@@ -10,7 +10,9 @@
 // Triggers compare the outlooks of the same convective day, whatever its slot:
 // yesterday's day 2 is today's day 1. For each house, the last category and
 // tornado probability seen for each date are kept (src/store.js, so they
-// survive restarts). The first cycle of a house only sets that reference.
+// survive restarts). The first cycle of a house only sets that reference, for
+// every date that had an outlook then. When two slots cover the same date (the
+// hour after a morning issue), the newest issue counts.
 //   - risk_reached: one event per level (1 to 5) the category crosses upwards,
 //     a date seen for the first time starting from 0;
 //   - risk_increased: the category of a date already seen goes up;
@@ -49,6 +51,29 @@ const DAY = 24 * HOUR;
 export const HEARTBEAT_MS = 12 * HOUR;
 // requestWidgetRefresh is rate-limited to one call every 10 s by the core.
 const WIDGET_REFRESH_GAP_MS = 10 * 1000;
+
+/** "2026-11-07" shifted by `days` days. */
+export function shiftDate(date, days) {
+  return new Date(Date.parse(`${date}T12:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+}
+
+/**
+ * One outlook per convective date, the newest issue winning: for an hour or so
+ * after the morning issue of day 1, the day 2 of the evening before covers the
+ * same date with older values, and must not overwrite the reference.
+ * @returns {Array<[number, object]>} [day, outlook], by day
+ */
+export function latestByDate(outlooks) {
+  const byDate = new Map();
+  for (const day of DAYS) {
+    const outlook = outlooks[day];
+    const kept = outlook && byDate.get(outlook.date);
+    if (outlook && (!kept || outlook.issued > kept[1].issued)) {
+      byDate.set(outlook.date, [day, outlook]);
+    }
+  }
+  return [...byDate.values()].sort((a, b) => a[0] - b[0]);
+}
 
 export class Monitor {
   /**
@@ -219,16 +244,24 @@ export class Monitor {
       return false;
     }
     const memory = (this.memory[house.selector] ??= { seeded: false, dates: {} });
-    const events = [];
     let changed = false;
-    for (const day of DAYS) {
-      const outlook = outlooks[day];
-      if (!outlook) {
-        continue;
-      }
+    if (!memory.seeded) {
+      // The reference covers every date that already had an outlook, even a
+      // day whose file could not be read this time: day N of today's date is
+      // the date + N - 1, so the dates up to today + 2 existed.
+      memory.horizon = DAYS.filter((day) => outlooks[day])
+        .map((day) => shiftDate(outlooks[day].date, 3 - day))
+        .reduce((max, date) => (date > max ? date : max));
+      memory.seeded = true;
+      changed = true;
+    }
+    const events = [];
+    for (const [day, outlook] of latestByDate(outlooks)) {
       const previous = memory.dates[outlook.date];
       const tornado = outlook.hazards.tornado?.probability ?? null;
-      if (memory.seeded) {
+      // A date first seen inside the reference horizon only sets its reference.
+      const known = Boolean(previous) || !memory.horizon || outlook.date > memory.horizon;
+      if (known) {
         events.push(...this.eventsOf(house, day, outlook, previous, tornado, outlooks));
       }
       const next = { level: outlook.level, tornado: tornado ?? previous?.tornado ?? 0 };
@@ -244,10 +277,6 @@ export class Monitor {
         delete memory.dates[date];
         changed = true;
       }
-    }
-    if (!memory.seeded) {
-      memory.seeded = true;
-      changed = true;
     }
     if (isCreated) {
       await this.fire(events);

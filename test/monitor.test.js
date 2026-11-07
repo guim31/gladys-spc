@@ -9,7 +9,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { houseIds } from '../src/devices.js';
-import { HEARTBEAT_MS, TRIGGERS } from '../src/monitor.js';
+import { HEARTBEAT_MS, latestByDate, TRIGGERS } from '../src/monitor.js';
 import { STATUS } from '../src/messages.js';
 import { createWorld, fixtureFetch, HOUSES, response } from './helpers/world.js';
 
@@ -357,6 +357,111 @@ test('a reconnection publishes the houses, devices and states again', async () =
       world.fake.discoveredDevices.map((d) => d.name),
       ['Severe storm outlook · Forks', 'Severe storm outlook · Midland'],
     );
+  } finally {
+    await world.cleanup();
+  }
+});
+
+const outlook = (date, level, issued, tornado = 0) => ({
+  date,
+  level,
+  issued,
+  thunder: true,
+  hazards: { tornado: { probability: tornado, intensity: 0 } },
+});
+
+test('two slots on the same date: the newest issue counts, and fires once', async () => {
+  const world = await createWorld({ houses: [HOUSES.forks], created: ['forks'] });
+  try {
+    const before = world.fake.sceneEvents.length;
+    // 06 UTC: the new day 1 says Enhanced, the day 2 of the evening before still says Slight.
+    world.monitor.memory.forks = {
+      seeded: true,
+      dates: { '2026-11-10': { level: 1, tornado: 0 } },
+    };
+    world.monitor.outlooks = () => ({
+      1: outlook('2026-11-10', 3, 2000, 10),
+      2: outlook('2026-11-10', 2, 1000, 5),
+    });
+    await world.monitor.runCycle();
+    world.clock.now += 15 * MINUTE;
+    await world.monitor.runCycle();
+    const fired = world.fake.sceneEvents.slice(before);
+    assert.deepEqual(
+      fired
+        .filter((e) => e.key === TRIGGERS.RISK_REACHED)
+        .map((e) => [e.data.day, e.data.threshold]),
+      [
+        ['1', '2'],
+        ['1', '3'],
+      ],
+    );
+    assert.equal(fired.filter((e) => e.key === TRIGGERS.RISK_INCREASED).length, 1);
+    assert.equal(fired.filter((e) => e.key === TRIGGERS.TORNADO_REACHED).length, 3);
+    assert.deepEqual(world.monitor.memory.forks.dates['2026-11-10'], { level: 3, tornado: 10 });
+  } finally {
+    await world.cleanup();
+  }
+});
+
+test('latestByDate keeps one outlook per date, the newest issue', () => {
+  const kept = latestByDate({
+    1: outlook('d2', 3, 2),
+    2: outlook('d2', 2, 1),
+    3: outlook('d3', 1, 1),
+  });
+  assert.deepEqual(
+    kept.map(([day, o]) => [day, o.level]),
+    [
+      [1, 3],
+      [3, 1],
+    ],
+  );
+});
+
+test('a day missing at the first cycle is still in the reference when it comes back', async () => {
+  const world = await createWorld({ houses: [HOUSES.forks], created: ['forks'] });
+  try {
+    delete world.monitor.memory.forks;
+    const before = world.fake.sceneEvents.length;
+    world.monitor.outlooks = () => ({ 1: outlook('2026-11-10', 0, 1) });
+    await world.monitor.runCycle();
+    // Day 3 readable again, already Slight: it existed at the first cycle.
+    world.monitor.outlooks = () => ({
+      1: outlook('2026-11-10', 0, 1),
+      3: outlook('2026-11-12', 2, 1),
+    });
+    await world.monitor.runCycle();
+    assert.equal(world.fake.sceneEvents.length, before);
+    // The next day 3 is a new date: it fires.
+    world.monitor.outlooks = () => ({
+      1: outlook('2026-11-11', 0, 2),
+      3: outlook('2026-11-13', 2, 2),
+    });
+    await world.monitor.runCycle();
+    assert.deepEqual(
+      world.fake.sceneEvents.slice(before).map((e) => [e.key, e.data.day, e.data.threshold]),
+      [
+        [TRIGGERS.RISK_REACHED, '3', '1'],
+        [TRIGGERS.RISK_REACHED, '3', '2'],
+      ],
+    );
+  } finally {
+    await world.cleanup();
+  }
+});
+
+test('an optional layer down keeps the day: categories still published, status connected', async () => {
+  const fetch = fixtureFetch({
+    overrides: [[(url) => url.endsWith('day1otlk_hail.lyr.geojson'), () => response(500)]],
+  });
+  const world = await createWorld({ houses: [HOUSES.forks], created: ['forks'], fetch });
+  try {
+    const ids = houseIds(world.gladys, 'forks');
+    assert.equal(world.fake.lastState(ids.day1_category), 1);
+    assert.equal(world.fake.lastState(ids.day1_wind), 5);
+    assert.equal(world.fake.lastState(ids.day1_hail), undefined);
+    assert.equal(world.fake.connectionStatus.connected, true);
   } finally {
     await world.cleanup();
   }

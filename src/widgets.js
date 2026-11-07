@@ -113,7 +113,7 @@ export function hazardsValue(hazards, language) {
   return clip(intensity > 0 ? `${text} · CIG${intensity}` : text);
 }
 
-function content(monitor, house, language, settings) {
+function content(monitor, house, language, settings, houseName = null) {
   const outlooks = monitor.outlooks(house);
   if (Object.keys(outlooks).length === 0) {
     return [{ type: 'text', variant: 'body', text: t(TEXT.unavailable, language) }];
@@ -163,7 +163,10 @@ function content(monitor, house, language, settings) {
     components.push({
       type: 'text',
       variant: 'caption',
-      text: fill(t(TEXT.issued, language), { date: formatDateTime(issued, language) }),
+      text:
+        // Several houses: say which one (its name in Gladys).
+        (houseName ? `${clip(houseName, 30)} · ` : '') +
+        fill(t(TEXT.issued, language), { date: formatDateTime(issued, language) }),
     });
   }
   if (settings.show_link !== false) {
@@ -183,6 +186,7 @@ export const WIDGETS = {
     async get(monitor, { settings, language = 'en' } = {}) {
       const lang = LEVEL_NAMES[language] ? language : 'en';
       const created = monitor.created();
+      const many = created.length > 1;
       const chosen =
         typeof settings?.house === 'string' && settings.house
           ? selectorOfExternalId(monitor.gladys, settings.house)
@@ -191,12 +195,13 @@ export const WIDGETS = {
       if (chosen) {
         const house = created.find((h) => h.selector === chosen);
         components = house
-          ? content(monitor, house, lang, settings ?? {})
+          ? content(monitor, house, lang, settings ?? {}, many ? monitor.deviceName(house) : null)
           : [{ type: 'text', variant: 'body', text: t(TEXT.gone, lang) }];
       } else if (created.length === 0) {
         components = [{ type: 'text', variant: 'body', text: t(TEXT.empty, lang) }];
       } else {
-        components = content(monitor, created[0], lang, settings ?? {});
+        const name = many ? monitor.deviceName(created[0]) : null;
+        components = content(monitor, created[0], lang, settings ?? {}, name);
       }
       return { ttl_seconds: TTL_SECONDS, components };
     },
